@@ -6,6 +6,11 @@ from fastapi.params import Query
 
 from bdi_api.settings import Settings
 
+import time
+import requests
+import json
+import glob
+
 settings = Settings()
 
 s1 = APIRouter(
@@ -16,6 +21,23 @@ s1 = APIRouter(
     prefix="/api/s1",
     tags=["s1"],
 )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 @s1.post("/aircraft/download")
@@ -52,11 +74,78 @@ def download_data(
     base_url = settings.source_url + "/2023/11/01/"
     # TODO Implement download
 
+    # Urls
+    folder_name = os.path.join(settings.raw_dir, "20231101")
+    os.makedirs(folder_name, exist_ok=True)
+    base_url = settings.source_url + "/2023/11/01/"
+    suffix_url = "Z.json.gz"
+    print(folder_name)
+
+
+    # Vars for the while loop
+    files_retrived = 0
+    counter = 0
+
+    while files_retrived < file_limit:
+        time.sleep(2)
+        try:
+            response = requests.get(f"{base_url}{counter:06d}{suffix_url}")
+
+            if response.status_code == 200:
+                # 1. Use the built-in .json() method. 
+                # It handles decryption/decompression automatically.
+                data = response.json() 
+                
+                print(f"File {counter:06d} parsed successfully.")
+
+                # Save the dictionary to a local file
+                file_path = os.path.join(folder_name, f"{counter:06d}.json")
+                with open(file_path, 'w', encoding='utf-8') as out_file:
+                    json.dump(data, out_file, indent=4)
+                
+                files_retrived += 1
+            else:
+                print(f"File {counter:06d} not found (Status {response.status_code})")
+
+        except Exception as e:
+            print(f"Error processing {counter:06d}: {e}")
+            break;
+
+        counter += 5
+
+
+
+
+
+
     return "OK"
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 @s1.post("/aircraft/prepare")
-def prepare_data() -> str:
+def prepare_data() -> list[dict]:
     """Prepare the data in the way you think it's better for the analysis.
 
     * data: https://samples.adsbexchange.com/readsb-hist/2023/11/01/
@@ -75,7 +164,79 @@ def prepare_data() -> str:
     Keep in mind that we are downloading a lot of small files, and some libraries might not work well with this!
     """
     # TODO
-    return "OK"
+
+    # 1. Read the files (all JSON files in the folder)
+    folder_name = os.path.join(settings.raw_dir, "20231101")
+    files = sorted(glob.glob(os.path.join(folder_name, "*.json")))
+
+    # 2. Print the results, read contents and extract aircraft info
+    print(f"Total files found: {len(files)}")
+    aircraft_list: list[dict] = []
+    for f in files:
+        try:
+            with open(f, "r", encoding="utf-8") as fh:
+                data = json.load(fh)
+
+            # Support both list-of-aircraft files and dicts with an 'aircraft' key
+            candidates = []
+            if isinstance(data, list):
+                candidates = data
+            elif isinstance(data, dict) and "aircraft" in data and isinstance(data["aircraft"], list):
+                candidates = data["aircraft"]
+            elif isinstance(data, dict):
+                # Some files may be a single aircraft dict
+                candidates = [data]
+
+            for a in candidates:
+                if not isinstance(a, dict):
+                    continue
+                icao = a.get("hex")
+                if not icao:
+                    # try common alternatives
+                    icao = a.get("icao") or a.get("id")
+                if not icao:
+                    continue
+                registration = a.get("r") or a.get("reg") or a.get("registration")
+                ac_type = a.get("t") or a.get("type")
+                aircraft_list.append({"icao": icao, "registration": registration, "type": ac_type})
+
+        except Exception as e:
+            print(f"Failed reading {f}: {e}")
+
+    print(f"Total aircraft extracted: {len(aircraft_list)}")
+
+
+
+
+    return aircraft_list[:30]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 @s1.get("/aircraft/")
@@ -85,6 +246,48 @@ def list_aircraft(num_results: int = 100, page: int = 0) -> list[dict]:
     """
     # TODO
     return [{"icao": "0d8300", "registration": "YV3382", "type": "LJ31"}]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 @s1.get("/aircraft/{icao}/positions")

@@ -1,14 +1,30 @@
 services:
-  mongodb:
+  mongo1:
     image: mongo:7
-    container_name: bdi-mongodb
+    container_name: mongo1
+    command: mongod --replSet bdi-rs --bind_ip_all
     ports:
       - "27017:27017"
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: admin
-      MONGO_INITDB_ROOT_PASSWORD: admin123
     volumes:
-      - mongodb_data:/data/db
+      - mongo1_data:/data/db
+
+  mongo2:
+    image: mongo:7
+    container_name: mongo2
+    command: mongod --replSet bdi-rs --bind_ip_all
+    ports:
+      - "27018:27017"
+    volumes:
+      - mongo2_data:/data/db
+
+  mongo3:
+    image: mongo:7
+    container_name: mongo3
+    command: mongod --replSet bdi-rs --bind_ip_all
+    ports:
+      - "27019:27017"
+    volumes:
+      - mongo3_data:/data/db
 
   neo4j:
     image: neo4j:5
@@ -22,5 +38,7 @@ services:
       - neo4j_data:/data
 
 volumes:
-  mongodb_data:
+  mongo1_data:
+  mongo2_data:
+  mongo3_data:
   neo4j_data:
